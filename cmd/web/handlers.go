@@ -2,6 +2,9 @@ package main
 
 import (
 	"net/http"
+	"time"
+
+	"github.com/sindrishtepani/go-stripe/internal/models"
 )
 
 func (app *application) VirtualTerminal(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +50,22 @@ func (app *application) PaymentSucceeded(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *application) ChargeOnce(w http.ResponseWriter, r *http.Request) {
-	if err := app.renderTemplate(w, r, "buy-once", nil, "stripe-js"); err != nil {
+	widget := models.Widget{
+		Id:             1,
+		Name:           "Custom Widget",
+		Description:    "A very nice widget",
+		Inventorylevel: 10,
+		Price:          1000,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	data := make(map[string]interface{})
+	data["widget"] = widget
+
+	if err := app.renderTemplate(w, r, "buy-once", &templateData{
+		Data: data,
+	}, "stripe-js"); err != nil {
 		app.errorLog.Println(err)
 	}
 }
