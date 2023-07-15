@@ -11,7 +11,7 @@ Virtual Terminal
 <div class="alert alert-danger text-center d-none" id="card-messages"></div>
 
 <form
-  action="/payment-succeeded"
+  action="/virtual-terminal-payment-succeeded"
   method="post"
   name="charge_form"
   id="charge_form"
@@ -20,12 +20,11 @@ Virtual Terminal
   novalidate=""
 >
   <div class="mb-3">
-    <label for="amount" class="form-label">Amount</label>
+    <label for="charge_amount" class="form-label">Amount</label>
     <input
       type="text"
       class="form-control"
-      id="amount"
-      name="amount"
+      id="charge_amount"
       required=""
       autocomplete="amount-new"
     />
@@ -76,7 +75,7 @@ Virtual Terminal
       <span class="visually-hidden">Loading...</span>
     </div>
   </div>
-
+  <input type="hidden" name="amount" id="amount" />
   <input type="hidden" name="payment_intent" id="payment_intent" />
   <input type="hidden" name="payment_method" id="payment_method" />
   <input type="hidden" name="payment_amount" id="payment_amount" />
@@ -85,5 +84,15 @@ Virtual Terminal
 {{ end }}
 
 {{define "js"}}
+<script>
+  document.getElementById("charge_amount").addEventListener("change", function (evt) {
+    if (evt.target.value !== "") {
+      document.getElementById("amount").value = parseInt((evt.target.value * 100), 10);
+    } else {
+      document.getElementById("amount").value = 0;
+    }
+  });
+</script>
+
 {{template "stripe-js" .}}
 {{ end }}
