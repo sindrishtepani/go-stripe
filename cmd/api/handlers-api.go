@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/sindrishtepani/go-stripe/internal/cards"
 	"github.com/sindrishtepani/go-stripe/internal/models"
 	stripe "github.com/stripe/stripe-go/v72"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type stripePayload struct {
@@ -241,4 +244,93 @@ func (app *application) SaveOrder(order models.Order) (int, error) {
 	}
 
 	return id, nil
+}
+
+func (app *application) CreateAuthToken(w http.ResponseWriter, r *http.Request) {
+	var userInput struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := app.readJSON(w, r, &userInput)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// get the user from the database by email; send error if invalid email
+	user, err := app.DB.GetUserByEmail(userInput.Email)
+	if err != nil {
+		app.invalidCredentials(w)
+		return
+	}
+
+	// validate the password; send error if invalid password
+	validPassword, err := app.passwordMatches(user.Password, userInput.Password)
+	if err != nil {
+		app.invalidCredentials(w)
+		return
+	}
+
+	if !validPassword {
+		app.invalidCredentials(w)
+		return
+	}
+	// generate token
+	token, err := models.GenerateToken(user.Id, 24*time.Hour, models.ScopeAuthentication)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	err = app.DB.InsertToken(token, user)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// send response
+
+	var payload struct {
+		Error   bool          `json:"error"`
+		Message string        `json:"message"`
+		Token   *models.Token `json:"authentication_token"`
+	}
+
+	payload.Error = false
+	payload.Message = fmt.Sprintf("token for %s created", userInput.Email)
+	payload.Token = token
+
+	_ = app.writeJSON(w, http.StatusOK, payload)
+}
+
+func (app *application) invalidCredentials(w http.ResponseWriter) error {
+	var payload struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	payload.Error = true
+	payload.Message = "invalid authentication credentials"
+
+	err := app.writeJSON(w, http.StatusUnauthorized, payload)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (app *application) passwordMatches(hash, password string) (bool, error) {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	if err != nil {
+		switch {
+		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
+			return false, nil
+		default:
+			return false, err
+		}
+	}
+
+	return true, nil
 }
