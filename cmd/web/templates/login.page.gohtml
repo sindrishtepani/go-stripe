@@ -109,6 +109,7 @@ Login
             data.authentication_token.expiry
           );
           showSuccess();
+          location.href = "/";
         } else {
           showError(data.message);
         }

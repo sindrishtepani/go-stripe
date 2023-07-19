@@ -37,9 +37,6 @@
             <li class="nav-item">
               <a class="nav-link active" aria-current="page" href="/">Home</a>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="/virtual-terminal">Virtual Terminal</a>
-            </li>
             <li class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"
@@ -59,9 +56,12 @@
                 </li>
               </ul>
             </li>
+            <li id="vt-link" class="nav-item d-none">
+              <a class="nav-link" href="/virtual-terminal">Virtual Terminal</a>
+            </li>
           </ul>
           <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-            <li class="nav-item">
+            <li id="login-link" class="nav-item d-none">
               <a class="nav-link" href="/login">Login</a>
             </li>
           </ul>
@@ -83,7 +83,58 @@
       crossorigin="anonymous"
     ></script>
 
+    <script>
+      let loginLink = document.getElementById("login-link");
+      let vtLink = document.getElementById("vt-link");
+
+      document.addEventListener("DOMContentLoaded", function () {
+        if (localStorage.getItem("token") !== null) {
+          loginLink.innerHTML =
+            '<a class="nav-link" onclick=logout() href="#!">Logout</a>';
+          vtLink.classList.remove("d-none");
+        } else {
+          loginLink.innerHTML = '<a class="nav-link" href="/login">Login</a>';
+        }
+        loginLink.classList.remove("d-none");
+      });
+
+      function logout() {
+        localStorage.removeItem("token");
+        localStorage.removeItem("token_expiry");
+        location.href = "/login";
+      }
+
+      function checkAuth() {
+        if (localStorage.getItem("token") === null) {
+          location.href = "/login";
+          return;
+        } else {
+          let token = localStorage.getItem("token");
+          const myHeaders = new Headers();
+          myHeaders.append("Content-Type", "application/json");
+          myHeaders.append("Authorization", "Bearer " + token);
+
+          const requestOptions = {
+            method: "POST",
+            headers: myHeaders,
+          };
+
+          fetch("{{.API}}/api/is-authenticated", requestOptions)
+            .then((response) => response.json())
+            .then(function (data) {
+              if (data.error === true) {
+                location.href = "/login";
+                console.log("not logged in");
+              } else {
+                console.log("loggin in");
+              }
+            });
+        }
+      }
+    </script>
+
     {{block "js" .}}
+
     {{ end }}
   </body>
 </html>
