@@ -3,6 +3,7 @@ module github.com/sindrishtepani/go-stripe
 go 1.20
 
 require (
+	github.com/alexedwards/scs/mysqlstore v0.0.0-20230327161757-10d4299e3b24
 	github.com/alexedwards/scs/v2 v2.5.1
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/go-chi/cors v1.2.1
