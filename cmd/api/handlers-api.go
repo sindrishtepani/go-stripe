@@ -430,6 +430,8 @@ func (app *application) VirtualTerminalPaymentSucceeded(w http.ResponseWriter, r
 		ExpiryYear:          txnData.ExpiryYear,
 		BankReturnCode:      pi.Charges.Data[0].ID,
 		TransactionStatusId: 2,
+		PaymentIntent:       txnData.PaymentIntent,
+		PaymentMethod:       txnData.PaymentMethod,
 	}
 
 	_, err = app.SaveTransaction(txn)
