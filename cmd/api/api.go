@@ -25,6 +25,14 @@ type config struct {
 		secret string
 		key    string
 	}
+	smpt struct {
+		host     string
+		port     int
+		username string
+		password string
+	}
+	secretkey string
+	frontend  string
 }
 
 type application struct {
@@ -56,6 +64,13 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4001, "Server port to listen on")
 	flag.StringVar(&cfg.env, "env", "development", "Application environment {developement, production, maintainace}")
 	flag.StringVar(&cfg.db.dsn, "dsn", "sshtepan:1234@tcp(localhost:3306)/widgets?parseTime=true&tls=false", "DSN")
+	flag.StringVar(&cfg.smpt.host, "smpthost", "sandbox.smtp.mailtrap.io", "smpt host")
+	flag.StringVar(&cfg.smpt.username, "smptuser", "9e2f25062a07f9", "smpt user")
+	flag.StringVar(&cfg.smpt.password, "smptpassword", "bd1cb30c6b3e74", "smpt password")
+	flag.IntVar(&cfg.smpt.port, "smptport", 587, "smpt port")
+
+	flag.StringVar(&cfg.secretkey, "secret", "MRKLO5E2I7DMN0DQJADXGMPVL4N3O5FQ", "secret key")
+	flag.StringVar(&cfg.frontend, "frontend", "http://localhost:4000", "front end path")
 
 	flag.Parse()
 
