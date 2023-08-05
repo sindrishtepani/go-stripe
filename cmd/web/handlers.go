@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sindrishtepani/go-stripe/internal/cards"
+	"github.com/sindrishtepani/go-stripe/internal/encryption"
 	"github.com/sindrishtepani/go-stripe/internal/models"
+	"github.com/sindrishtepani/go-stripe/internal/urlsigner"
 )
 
 func (app *application) Home(w http.ResponseWriter, r *http.Request) {
@@ -329,4 +332,64 @@ func (app *application) Logout(w http.ResponseWriter, r *http.Request) {
 	app.Session.RenewToken(r.Context())
 
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func (app *application) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "forgot-password", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+func (app *application) ShowResetPassword(w http.ResponseWriter, r *http.Request) {
+	email := r.URL.Query().Get("email")
+	theUrl := r.RequestURI
+	testUrl := fmt.Sprintf("%s%s", app.config.frontend, theUrl)
+
+	signer := urlsigner.Signer{
+		Secret: []byte(app.config.secretkey),
+	}
+
+	valid := signer.VerifyToken(testUrl)
+
+	if !valid {
+		app.errorLog.Println("Invalid url")
+		return
+	}
+
+	expired := signer.Expired(testUrl, 60)
+	if expired {
+		app.errorLog.Println("Link expired")
+		return
+	}
+
+	encryptor := encryption.Encryption{
+		Key: []byte(app.config.secretkey),
+	}
+
+	encryptedEmail, err := encryptor.Encrypt(email)
+	if err != nil {
+		app.errorLog.Println(err)
+		return
+	}
+
+	data := make(map[string]interface{})
+	data["email"] = encryptedEmail
+
+	if err := app.renderTemplate(w, r, "reset-password", &templateData{
+		Data: data,
+	}); err != nil {
+		app.errorLog.Print(err)
+	}
+}
+
+func (app *application) AllSales(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "all-sales", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
+}
+
+func (app *application) AllSubscriptions(w http.ResponseWriter, r *http.Request) {
+	if err := app.renderTemplate(w, r, "all-subscriptions", &templateData{}); err != nil {
+		app.errorLog.Println(err)
+	}
 }

@@ -11,7 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sindrishtepani/go-stripe/internal/cards"
+	"github.com/sindrishtepani/go-stripe/internal/encryption"
 	"github.com/sindrishtepani/go-stripe/internal/models"
+	"github.com/sindrishtepani/go-stripe/internal/urlsigner"
 	stripe "github.com/stripe/stripe-go/v72"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -441,4 +443,122 @@ func (app *application) VirtualTerminalPaymentSucceeded(w http.ResponseWriter, r
 	}
 
 	app.writeJSON(w, http.StatusOK, txn)
+}
+
+func (app *application) SendPasswordResetEmail(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Email string `json:"email"`
+	}
+
+	err := app.readJSON(w, r, &payload)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	// verify that email exists
+
+	_, err = app.DB.GetUserByEmail(payload.Email)
+	if err != nil {
+		var resp struct {
+			Error   bool   `json:"error"`
+			Message string `json:"message"`
+		}
+		resp.Error = true
+		resp.Message = "No matching email found on our system"
+		app.writeJSON(w, http.StatusAccepted, err)
+		return
+	}
+
+	link := fmt.Sprintf("%s/reset-password?email=%s", app.config.frontend, payload.Email)
+
+	sign := urlsigner.Signer{
+		Secret: []byte(app.config.secretkey),
+	}
+
+	var data struct {
+		Link string
+	}
+
+	signedLink := sign.GenerateTokenFromString(link)
+
+	data.Link = signedLink
+
+	// send email
+	err = app.SendMail("info@widgets.com", payload.Email, "Password Reset Request", "password-reset", data)
+	if err != nil {
+		app.errorLog.Println(err)
+		app.badRequest(w, r, err)
+		return
+	}
+
+	var resp struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	resp.Error = false
+
+	app.writeJSON(w, http.StatusCreated, resp)
+}
+
+func (app *application) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := app.readJSON(w, r, &payload)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	encryptor := encryption.Encryption{
+		Key: []byte(app.config.secretkey),
+	}
+
+	decryptedEmail, err := encryptor.Decrypt(payload.Email)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	user, err := app.DB.GetUserByEmail(decryptedEmail)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), 12)
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	err = app.DB.UpdatePasswordForUser(user, string(newHash))
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	var resp struct {
+		Error   bool   `json:"error"`
+		Message string `json:"message"`
+	}
+
+	resp.Error = false
+	resp.Message = "password changed"
+
+	app.writeJSON(w, http.StatusCreated, resp)
+}
+
+func (app *application) AllSales(w http.ResponseWriter, r *http.Request) {
+	allSales, err := app.DB.GetAllOrders()
+	if err != nil {
+		app.badRequest(w, r, err)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, allSales)
 }
