@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -305,11 +306,24 @@ func (m *DBModel) UpdatePasswordForUser(u User, hash string) error {
 	return nil
 }
 
-func (m DBModel) GetAllOrders() ([]*Order, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+func buildOrdersQuery(idWhereClause, isRecurring bool) string {
+	var recurringFlag int
+	if isRecurring {
+		recurringFlag = 1
+	} else {
+		recurringFlag = 0
+	}
 
-	var orders []*Order
+	var idQuery string
+	var recurringQuery string
+
+	if idWhereClause {
+		idQuery = " o.id = ? "
+		recurringQuery = " w.is_recurring in (1, 0) "
+	} else {
+		idQuery = " o.id != 0 "
+		recurringQuery = " w.is_recurring = " + fmt.Sprintf("%d", recurringFlag)
+	}
 
 	query := `
 	select
@@ -324,11 +338,22 @@ func (m DBModel) GetAllOrders() ([]*Order, error) {
 		left join widgets w on (o.widget_id = w.id)
 		left join transactions t on (o.transaction_id = t.id)
 		left join customers c on (o.customer_id = c.id)
-	where
-		w.is_recurring = 0
+	where ` +
+		recurringQuery + `
+		and ` + idQuery + `
 	order by
 		o.created_at desc
 	`
+	return query
+}
+
+func (m DBModel) GetAllOrders() ([]*Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var orders []*Order
+
+	query := buildOrdersQuery(false, false)
 
 	rows, err := m.DB.QueryContext(ctx, query)
 	if err != nil {
@@ -371,5 +396,100 @@ func (m DBModel) GetAllOrders() ([]*Order, error) {
 	}
 
 	return orders, nil
+
+}
+
+func (m DBModel) GetAllSubscriptions() ([]*Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var orders []*Order
+
+	query := buildOrdersQuery(false, true)
+
+	rows, err := m.DB.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var o Order
+
+		err = rows.Scan(
+			&o.Id,
+			&o.WidgetId,
+			&o.TransactionId,
+			&o.CustomerId,
+			&o.StatusId,
+			&o.Quantity,
+			&o.Amount,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.Widget.Id,
+			&o.Widget.Name,
+			&o.Transaction.Id,
+			&o.Transaction.Amount,
+			&o.Transaction.Currency,
+			&o.Transaction.LastFour,
+			&o.Transaction.ExpiryMonth,
+			&o.Transaction.ExpiryYear,
+			&o.Transaction.PaymentIntent,
+			&o.Transaction.BankReturnCode,
+			&o.Customer.Id,
+			&o.Customer.FirstName,
+			&o.Customer.LastName,
+			&o.Customer.Email,
+		)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, &o)
+	}
+
+	return orders, nil
+
+}
+
+func (m DBModel) GetOrderById(id int) (Order, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var o Order
+
+	query := buildOrdersQuery(true, false)
+
+	row := m.DB.QueryRowContext(ctx, query, id)
+
+	err := row.Scan(
+		&o.Id,
+		&o.WidgetId,
+		&o.TransactionId,
+		&o.CustomerId,
+		&o.StatusId,
+		&o.Quantity,
+		&o.Amount,
+		&o.CreatedAt,
+		&o.UpdatedAt,
+		&o.Widget.Id,
+		&o.Widget.Name,
+		&o.Transaction.Id,
+		&o.Transaction.Amount,
+		&o.Transaction.Currency,
+		&o.Transaction.LastFour,
+		&o.Transaction.ExpiryMonth,
+		&o.Transaction.ExpiryYear,
+		&o.Transaction.PaymentIntent,
+		&o.Transaction.BankReturnCode,
+		&o.Customer.Id,
+		&o.Customer.FirstName,
+		&o.Customer.LastName,
+		&o.Customer.Email,
+	)
+	if err != nil {
+		return o, err
+	}
+
+	return o, nil
 
 }
