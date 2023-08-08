@@ -493,3 +493,17 @@ func (m DBModel) GetOrderById(id int) (Order, error) {
 	return o, nil
 
 }
+
+func (m *DBModel) UpdateOrderStatus(id, statusId int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	stmt := `update orders set status_id = ? where id = ?`
+
+	_, err := m.DB.ExecContext(ctx, stmt, statusId, id)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
