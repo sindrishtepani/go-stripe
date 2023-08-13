@@ -35,15 +35,16 @@ Bronze Plan
   <hr />
 
   <div class="mb-3">
-    <label for="first-name" class="form-label">First Name</label>
+    <label for="first_name" class="form-label">First Name</label>
     <input
       type="text"
       class="form-control"
-      id="first-name"
-      name="first-name"
+      id="first_name"
+      name="first_name"
       required=""
-      autocomplete="first-name-new"
+      autocomplete="first_name-new"
     />
+    <div id="first_name-help" class="valid-feedback">Looks good!</div>
   </div>
 
   <div class="mb-3">
@@ -121,8 +122,7 @@ Bronze Plan
   const payButton = document.getElementById("pay-button");
   const processing = document.getElementById("processing-payment");
 
-  stripe = Stripe( {{.StripePublishableKey}},
-  );
+  stripe = Stripe("{{.StripePublishableKey}}");
 
   function hidePayButton() {
     payButton.classList.add("d-none");
@@ -162,58 +162,82 @@ Bronze Plan
 
     let amountToCharge = document.getElementById("amount").value;
 
-    stripe.createPaymentMethod({
-        type: 'card',
+    stripe
+      .createPaymentMethod({
+        type: "card",
         card: card,
         billing_details: {
-            email: document.getElementById("cardholder-email").value,
+          email: document.getElementById("cardholder-email").value,
         },
-    }).then(stripePaymentMethodHandler);
+      })
+      .then(stripePaymentMethodHandler);
   }
 
   function stripePaymentMethodHandler(result) {
     if (result.error) {
-        showCardError(result.error.message);
+      showCardError(result.error.message);
     } else {
-        // create stripe customer and sub to plan
-        let payload = {
-            product_id: document.getElementById("product_id").value,
-            plan: '{{$widget.PlanId}}',
-            payment_method: result.paymentMethod.id,
-            email: document.getElementById("cardholder-email").value,
-            last_four: result.paymentMethod.card.last4,
-            card_brand: result.paymentMethod.card.brand,
-            exp_month: result.paymentMethod.card.exp_month,
-            exp_year: result.paymentMethod.card.exp_year,
-            first_name: document.getElementById("first-name").value,
-            last_name: document.getElementById("last-name").value,
-            amount: document.getElementById("amount").value,
-        }
-        const requestOptions = {
-            method: 'post',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        }
+      // create stripe customer and sub to plan
+      let payload = {
+        product_id: document.getElementById("product_id").value,
+        plan: "{{$widget.PlanId}}",
+        payment_method: result.paymentMethod.id,
+        email: document.getElementById("cardholder-email").value,
+        last_four: result.paymentMethod.card.last4,
+        card_brand: result.paymentMethod.card.brand,
+        exp_month: result.paymentMethod.card.exp_month,
+        exp_year: result.paymentMethod.card.exp_year,
+        first_name: document.getElementById("first_name").value,
+        last_name: document.getElementById("last-name").value,
+        amount: document.getElementById("amount").value,
+      };
+      const requestOptions = {
+        method: "post",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      };
 
-        fetch("{{.API}}/api/create-customer-and-subscribe-to-plan", requestOptions)
-        .then(response => response.json())
-        .then(function(data){
-            console.log(data);
+      fetch(
+        "{{.API}}/api/create-customer-and-subscribe-to-plan",
+        requestOptions
+      )
+        .then((response) => response.json())
+        .then(function (data) {
+          if (data.error === false) {
             processing.classList.add("d-none");
             showCardSuccess();
-            sessionStorage.first_name = document.getElementById("first-name").value;
-            sessionStorage.last_name = document.getElementById("last-name").value;
+            sessionStorage.first_name =
+              document.getElementById("first_name").value;
+            sessionStorage.last_name =
+              document.getElementById("last-name").value;
             sessionStorage.amount = "{{formatCurrency $widget.Price}}";
             sessionStorage.last_four = result.paymentMethod.card.last4;
 
             location.href = "/receipt/bronze";
-        })
+          } else {
+            document
+              .getElementById("charge_form")
+              .classList.remove("was-validated");
+
+            Object.entries(data.errors).forEach((i) => {
+              const [key, value] = i;
+              console.log(`${key}: ${value}`);
+              document.getElementById(key).classList.add("is-invalid");
+              document
+                .getElementById(key + "-help")
+                .classList.remove("valid-feedback");
+              document
+                .getElementById(key + "-help")
+                .classList.add("invalid-feedback");
+              document.getElementById(key + "-help").innerText = value;
+            });
+          }
+        });
     }
   }
-
 
   (function () {
     // create stripe & elements
