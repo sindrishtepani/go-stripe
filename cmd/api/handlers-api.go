@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,6 +115,17 @@ func (app *application) GetWidgetById(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
+type Invoice struct {
+	Id        int       `json:"id"`
+	Quantity  int       `json:"quantity"`
+	Amount    int       `json:"amount"`
+	Product   string    `json:"product"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, r *http.Request) {
 	var data stripePayload
 
@@ -193,12 +205,28 @@ func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, 
 			UpdatedAt:     time.Now(),
 		}
 
-		_, err = app.SaveOrder(order)
+		orderId, err := app.SaveOrder(order)
 		if err != nil {
 			app.errorLog.Println(err)
 			return
 		}
 
+		// call microservice
+		invoice := Invoice{
+			Id:        orderId,
+			Amount:    order.Amount,
+			Product:   "Widget",
+			Quantity:  order.Quantity,
+			FirstName: data.FirstName,
+			LastName:  data.LastName,
+			Email:     data.Email,
+			CreatedAt: time.Now(),
+		}
+
+		err = app.callInvoiceMircoservice(invoice)
+		if err != nil {
+			app.errorLog.Println(err)
+		}
 	}
 
 	resp := jsonResponse{
@@ -214,6 +242,30 @@ func (app *application) CreateCustomerAndSubscribeToPlan(w http.ResponseWriter, 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)
+}
+
+func (app *application) callInvoiceMircoservice(invoice Invoice) error {
+	url := "http://localhost:5000/invoice/create-and-send"
+	out, err := json.MarshalIndent(invoice, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(out))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	app.infoLog.Println(resp.Body)
+
+	return nil
 }
 
 func (app *application) SaveCustomer(firstName, lastName, email string) (int, error) {
